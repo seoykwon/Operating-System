@@ -7,6 +7,12 @@
 #include "proc.h"
 #include "spinlock.h"
 #include "math.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
+
+#define MMAPBASE 0x40000000
+struct mmap_area ma[64];
 
 struct
 {
@@ -202,6 +208,55 @@ int growproc(int n)
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
+// int fork(void)
+// {
+//   int i, pid;
+//   struct proc *np;
+//   struct proc *curproc = myproc();
+
+//   // Allocate process.
+//   if ((np = allocproc()) == 0)
+//   {
+//     return -1;
+//   }
+
+//   // Copy process state from proc.
+//   if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
+//   {
+//     kfree(np->kstack);
+//     np->kstack = 0;
+//     np->state = UNUSED;
+//     return -1;
+//   }
+//   np->sz = curproc->sz;
+//   np->parent = curproc;
+//   *np->tf = *curproc->tf;
+
+//   // Inherit the nice value & vruntime from parent
+//   np->nice = curproc->nice;
+//   np->vruntime = curproc->vruntime;
+
+//   // // start timing from 0
+//   // np->startTime = 1000 * ticks;
+
+//   // Clear %eax so that fork returns 0 in the child.
+//   np->tf->eax = 0;
+
+//   for (i = 0; i < NOFILE; i++)
+//     if (curproc->ofile[i])
+//       np->ofile[i] = filedup(curproc->ofile[i]);
+//   np->cwd = idup(curproc->cwd);
+
+//   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+//   pid = np->pid;
+
+//   acquire(&ptable.lock);
+//   np->state = RUNNABLE;
+//   release(&ptable.lock);
+
+//   return pid;
+// }
 int fork(void)
 {
   int i, pid;
@@ -222,16 +277,10 @@ int fork(void)
     np->state = UNUSED;
     return -1;
   }
+  np->vruntime = curproc->vruntime; //==========================================
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
-
-  // Inherit the nice value & vruntime from parent
-  np->nice = curproc->nice;
-  np->vruntime = curproc->vruntime;
-
-  // // start timing from 0
-  // np->startTime = 1000 * ticks;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -243,10 +292,61 @@ int fork(void)
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
+  for (int i = 0; i < 64; i++)
+  {
+    if ((ma[i].is_used == 1) && (ma[i].p == curproc))
+    {
+      for (int t = 0; t < 64; t++)
+      {
+        if (ma[t].is_used == 0)
+        {
+          ma[t].f = ma[i].f;
+          ma[t].addr = ma[i].addr;
+          ma[t].length = ma[i].length;
+          ma[t].offset = ma[i].offset;
+          ma[t].prot = ma[i].prot;
+          ma[t].flags = ma[i].flags;
+          ma[t].p = np;
+          ma[t].is_used = ma[i].is_used;
+
+          uint ptr = 0;
+          uint addr = ma[i].addr;
+          pte_t *pte;
+          int prot_write = 0;
+
+          char *mem = 0;
+
+          for (ptr = addr; ptr < addr + ma[i].length; ptr += PGSIZE)
+          {
+            pte = walkpgdir(curproc->pgdir, (char *)(ptr), 0);
+            if (!pte)
+              continue; // not in pte pass
+            if (!(*pte & PTE_P))
+              continue;
+            mem = kalloc();
+            if (!mem)
+              return 0;
+            memset(mem, 0, PGSIZE);
+            memmove(mem, (void *)ptr, PGSIZE);
+            int perm = ma[i].prot | PTE_U;
+            if (prot_write)
+              perm = perm | PTE_W;
+            int ret = mappages(np->pgdir, (void *)ptr, PGSIZE, V2P(mem), perm);
+            if (ret == -1)
+              return 0;
+          }
+          break;
+        }
+      }
+    }
+  }
+
   pid = np->pid;
 
   acquire(&ptable.lock);
+
   np->state = RUNNABLE;
+
   release(&ptable.lock);
 
   return pid;
@@ -840,4 +940,278 @@ void ps(int pid)
   }
   release(&ptable.lock);
   return;
+}
+
+uint mmap(uint addr, int length, int prot, int flags, int fd, int offset)
+{
+  // cprintf("addr: %d, length: %d, prot: %d, flags: %d, fd: %d, offset: %d\n", addr, length, prot, flags, fd, offset);
+
+  struct proc *p = myproc();
+  uint start_addr = addr + MMAPBASE;
+
+  // cprintf("start_addr : %d\n",start_addr);
+
+  struct file *f = 0;
+  if (fd != -1)
+  {
+    f = p->ofile[fd];
+  }
+
+  int anony = 0;
+  int populate = 0;
+  int prot_read = 0;
+  int prot_write = 0;
+  char *mem = 0;
+
+  if (flags & MAP_ANONYMOUS)
+    anony = 1;
+  if (flags & MAP_POPULATE)
+    populate = 1;
+  if (prot & PROT_READ)
+    prot_read = 1;
+  if (prot & PROT_WRITE)
+    prot_write = 1;
+
+  // cprintf("prot & PROT_READ: %d prot & PROT_WRITE: %d\n", prot & PROT_READ, prot & PROT_WRITE);
+
+  if ((!anony) && (fd == -1))
+  {
+    // cprintf("error It's not anonymous, but when the fd is -1\n");
+    return 0;
+  }
+  if (f != 0)
+  {
+    if (!(f->readable) && prot_read)
+    {
+      // cprintf("error protection of the file and the prot of the parameter are different\n");
+      return 0;
+    }
+    if (!(f->writable) && prot_write)
+    {
+      // cprintf("error protection of the file and the prot of the parameter are different\n");
+      return 0;
+    }
+  }
+
+  int i = 0;
+  while (ma[i].is_used != 0)
+  {
+    i++;
+  }
+
+  if (f)
+  {
+    f = filedup(f);
+  }
+
+  ma[i].f = f;
+  ma[i].addr = start_addr;
+  ma[i].length = length;
+  ma[i].offset = offset;
+  ma[i].prot = prot;
+  ma[i].flags = flags;
+  ma[i].p = p;
+  ma[i].is_used = 1;
+
+  if ((!anony) && (!populate))
+  {
+    // cprintf("it's not ANONY, not POPULATE\n");
+    return start_addr;
+    // to page fault, late phy mem alloc
+  }
+
+  if ((anony) && (!populate))
+  {
+    // cprintf("it's ANONY, not POPULATE\n");
+    return start_addr;
+    // to page fault, late phy mem alloc
+  }
+
+  if ((!anony) && (populate))
+  {
+    // cprintf("it's not ANONY, POPULATE\n");
+    f->off = offset;
+    uint ptr = 0;
+
+    for (ptr = start_addr; ptr < start_addr + length; ptr += PGSIZE)
+    {
+      mem = kalloc();
+      if (!mem)
+        return 0;
+      memset(mem, 0, PGSIZE);
+      fileread(f, mem, PGSIZE);
+      int perm = prot | PTE_U;
+      int ret = mappages(p->pgdir, (void *)(ptr), PGSIZE, V2P(mem), perm);
+      if (ret == -1)
+        return 0;
+    }
+    return start_addr;
+  }
+
+  if ((anony) && (populate))
+  {
+    // cprintf("it's ANONY, POPULATE\n");
+    uint ptr = 0;
+    for (ptr = start_addr; ptr < start_addr + length; ptr += PGSIZE)
+    {
+      mem = kalloc();
+      if (!mem)
+        return 0;
+      memset(mem, 0, PGSIZE);
+      int perm = prot | PTE_U;
+      int ret = mappages(p->pgdir, (void *)(ptr), PGSIZE, V2P(mem), perm);
+      if (ret == -1)
+        return 0;
+    }
+    return start_addr;
+  }
+
+  return start_addr;
+}
+
+int pfh(uint addr, uint err)
+{
+  struct proc *p = myproc();
+  int find_idx = -1;
+
+  for (int t = 0; t < 64; t++)
+  {
+    if (((ma[t].addr + ma[t].length) > addr) && (addr >= ma[t].addr))
+    {
+      if ((ma[t].p == p) && (ma[t].is_used == 1))
+      {
+        find_idx = t;
+        break;
+      }
+    }
+  }
+
+  if (find_idx == -1)
+  {
+    // cprintf("pfh error: no such address!\n");
+    return -1;
+  }
+
+  int anony = 0;
+  int prot_write = 0;
+  char *mem = 0;
+
+  if (ma[find_idx].flags & MAP_ANONYMOUS)
+    anony = 1;
+  if (ma[find_idx].prot & PROT_WRITE)
+    prot_write = 1;
+
+  // can't write(it is read) but try to write
+  if ((prot_write == 0) && ((err & 2) != 0))
+  {
+    // cprintf("error: can't write but try to write\n");
+    return -1;
+  }
+
+  cprintf("\npage fault ... %x\n", addr);
+
+  uint start_addr = ma[find_idx].addr;
+  uint length = ma[find_idx].length;
+  uint ptr = 0;
+
+  if (!anony)
+  {
+    // cprintf("\tit's not ANONY, POPULATE\n");
+    struct file *f = ma[find_idx].f;
+    f->off = ma[find_idx].offset;
+    for (ptr = start_addr; ptr < start_addr + length; ptr += PGSIZE)
+    {
+      if ((ptr <= addr) && (addr < ptr + PGSIZE))
+      {
+        mem = kalloc();
+        if (!mem)
+          return 0;
+        memset(mem, 0, PGSIZE);
+        fileread(f, mem, PGSIZE);
+        int perm = ma[find_idx].prot | PTE_U;
+        if (prot_write)
+          perm = perm | PTE_W;
+        int ret = mappages(p->pgdir, (void *)ptr, PGSIZE, V2P(mem), perm);
+        if (ret == -1)
+          return 0;
+      }
+      f->off += PGSIZE;
+    }
+  }
+  else
+  {
+    // cprintf("it's ANONY, POPULATE\n");
+    for (ptr = start_addr; ptr < start_addr + length; ptr += PGSIZE)
+    {
+      if ((ptr <= addr) && (addr < ptr + PGSIZE))
+      {
+        mem = kalloc();
+        if (!mem)
+          return 0;
+        memset(mem, 0, PGSIZE);
+        int perm = ma[find_idx].prot | PTE_U;
+        if (prot_write)
+          perm = perm | PTE_W;
+        int ret = mappages(p->pgdir, (void *)ptr, PGSIZE, V2P(mem), perm);
+        if (ret == -1)
+          return 0;
+      }
+    }
+  }
+
+  return 0;
+}
+
+int munmap(uint addr)
+{
+  struct proc *p = myproc();
+  int find_idx = -1;
+
+  for (int t = 0; t < 64; t++)
+  {
+    if (addr == ma[t].addr)
+    {
+      if ((ma[t].p == p) && (ma[t].is_used == 1))
+      {
+        find_idx = t;
+        break;
+      }
+    }
+  }
+
+  if (find_idx == -1)
+  {
+    // cprintf("error: unmap no such address!\n");
+    return -1;
+  }
+
+  uint ptr = 0;
+  pte_t *pte;
+
+  for (ptr = addr; ptr < addr + ma[find_idx].length; ptr += PGSIZE)
+  {
+    pte = walkpgdir(p->pgdir, (char *)(ptr), 0);
+    if (!pte)
+      continue; // page fault has not been occurred on that address, just remove mmap_area structure.
+    if (!(*pte & PTE_P))
+      continue;
+    uint paddr = PTE_ADDR(*pte);
+    char *v = P2V(paddr);
+    kfree(v);
+    *pte = 0;
+  }
+  ma[find_idx].f = 0;
+  ma[find_idx].addr = 0;
+  ma[find_idx].length = 0;
+  ma[find_idx].offset = 0;
+  ma[find_idx].prot = 0;
+  ma[find_idx].flags = 0;
+  ma[find_idx].p = 0;
+  ma[find_idx].is_used = 0;
+  return 1;
+}
+
+int freemem()
+{
+  return freememCount();
 }

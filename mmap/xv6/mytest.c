@@ -4,131 +4,82 @@
 
 int main()
 {
-    printf(1, "\ncheck all ps by ps(0):\n---------------------------\n");
-    ps(0);
-    int i;
+    int size = 8192;
+    int fd = open("README", O_RDONLY);
+    char *text = (char *)mmap(0, size, PROT_READ, MAP_ANONYMOUS | MAP_POPULATE, fd, 0);
+    printf(1, "mmap return is: %d\n", text);
+    printf(1, "text[0] is: %d\n", text[0]);
 
-    printf(1, "\ngetnice test ...\n");
-    for (i = -1; i < 6; i++)
-    {
-        printf(1, "\tgetnice(%d) \treturn: %d\n", i, getnice(i));
-    }
-    printf(1, "\tgetnice(%d) \treturn: %d\n", 1000, getnice(1000));
+    // int size = 8192;
+    // int fd = open("README", O_RDONLY);
+    // printf(1, "freemem now is %d\n", freemem());
+    // char *text = (char *)mmap(0, size, PROT_READ, 0, fd, 0);
+    // printf(1, "mmap return is: %d\n", text);
+    // printf(1, "freemem now is %d\n", freemem());
+    // printf(1, "text[4100] is: %c\n", text[4100]);
+    // printf(1, "freemem now is %d\n", freemem());
+    // // for(int i=4096; i<size; i++) printf(1, "%c", *(text+i));
+    // printf(1, "text[300] is: %c\n", text[300]);
+    // printf(1, "freemem now is %d\n", freemem());
+    // printf(1, "\n");
 
-    printf(1, "\nsetnice test 1...\n");
-    for (i = -1; i < 6; i++)
-    {
-        printf(1, "\tsetnice(%d,15) \treturn: %d\n", i, setnice(i, 15));
-        printf(1, "\tgetnice(%d) \treturn: %d\n", i, getnice(i));
-    }
-    printf(1, "\tsetnice(%d,15) \treturn: %d\n", 1000, setnice(1000, 15));
-    printf(1, "\tgetnice(%d) \treturn: %d\n", 1000, getnice(1000));
+    // int size = 8192;
+    // int fd = open("README", O_RDONLY);
+    // char *text = (char *)mmap(0, size, PROT_READ, 0, fd, 0);
+    // printf(1, "mmap return is: %d\n", text);
+    // printf(1, "text[9000] is: %c\n", text[9000]);
+    // printf(1, "\n");
 
-    printf(1, "\ncheck all ps by ps(0):\n---------------------------\n");
-    ps(0);
+    // int size = 8192;
+    // int fd = open("README", O_RDONLY);
+    // char *text = (char *)mmap(0, size, PROT_READ, 0, fd, 0);
+    // printf(1, "mmap return is: %d\n", text);
+    // text[5000] = '5';
+    // printf(1, "\n");
 
-    printf(1, "\nsetnice test 2...\n");
-    printf(1, "\tsetnice(%d,%d) \treturn: %d\n", 1, -1, setnice(1, -1));
-    printf(1, "\tgetnice(%d) \treturn: %d\n", 1, getnice(1));
-    printf(1, "\tsetnice(%d,%d) \treturn: %d\n", 1, 0, setnice(1, 0));
-    printf(1, "\tgetnice(%d) \treturn: %d\n", 1, getnice(1));
-    printf(1, "\tsetnice(%d,%d) \treturn: %d\n", 2, 39, setnice(2, 39));
-    printf(1, "\tgetnice(%d) \treturn: %d\n", 2, getnice(2));
-    printf(1, "\tsetnice(%d,%d) \treturn: %d\n", 2, 40, setnice(2, 40));
-    printf(1, "\tgetnice(%d) \treturn: %d\n", 2, getnice(2));
+    // int size = 8192;
+    // int fd = open("README", O_RDONLY);
+    // printf(1, "freemem now is %d\n", freemem());
+    // char *text = (char *)mmap(0, size, PROT_READ, MAP_POPULATE, fd, 0);
+    // printf(1, "mmap return is: %d\n", text);
+    // printf(1, "freemem now is %d\n", freemem());
+    // int ret = munmap(0 + MMAPBASE);
+    // printf(1, "munmap return is: %d\n", ret);
+    // printf(1, "freemem now is %d\n", freemem());
+    // printf(1, "\n");
 
-    printf(1, "\ncheck all ps by ps(0) %d:\n");
-    ps(0);
+    // int size = 8192;
+    // int fd = open("README", O_RDONLY);
+    // printf(1, "freemem now is %d\n", freemem());
+    // char *text = (char *)mmap(size, size, PROT_READ, MAP_POPULATE, fd, 0);
+    // printf(1, "mmap return is: %d\n", text);
+    // printf(1, "freemem now is %d\n", freemem());
+    // int ret = munmap(0 + MMAPBASE);
+    // printf(1, "munmap return is: %d\n", ret);
+    // printf(1, "freemem now is %d\n", freemem());
+    // printf(1, "\n");
 
-    printf(1, "\nps test ...\n");
-
-    for (i = -1; i < 6; i++)
-    {
-        printf(1, "\nps(%d)\n---------------------------\n", i);
-        ps(i);
-    }
-    exit();
-
-    /**
-     * int pid1 = fork();
-    int a = 1;
-    int range = 10000;
-
-
-    if(pid1>0){
-
-        setnice(getpid(),0);
-        for(int i = 0; i< range; i++){
-            for(int j = 0; j< range; j++){
-            a = 9.9+9.9*a;
-            }
-        }
-        printf(1,"ans: %d\n",a);
-
-    }
-    else if(pid1 == 0){
-        setnice(getpid(),10);
-        for(int i = 0; i< range; i++){
-            for(int j = 0; j< range; j++){
-            a = 9.9+9.9*a;
-            }
-        }
-        printf(1,"ans: %d\n",a);
-    }
-
-    exit();
-     */
-
-    /**
-     * setnice(getpid(),5);
-    int pid1 = fork();
-    int a = 1;
-    int range = 2000;
-
-    if(pid1>0){
-        int pid2 = fork();
-        if(pid2>0){
-            int pid3 = fork();
-
-            if(pid3>0){
-                wait();
-                for(int i = 0; i< range; i++){
-                    for(int j = 0; j< range; j++){
-                        a = 9.9+9.9*a;
-                    }
-                }
-                printf(1,"%d - ans: %d\n",getpid(),a);
-            }
-            else if (pid3==0){
-                setnice(getpid(),15);
-                for(int i = 0; i< range; i++){
-                    for(int j = 0; j< range; j++){
-                        a = 9.9+9.9*a;
-                    }
-                }
-                printf(1,"%d - ans: %d\n",getpid(),a);
-            }
-        }
-        else if(pid2 == 0){
-            setnice(getpid(),10);
-            for(int i = 0; i< range; i++){
-                for(int j = 0; j< range; j++){
-                a = 9.9+9.9*a;
-                }
-            }
-            printf(1,"%d - ans: %d\n",getpid(),a);
-        }
-    }
-    else if(pid1 == 0){
-        setnice(getpid(),5);
-        for(int i = 0; i< range; i++){
-            for(int j = 0; j< range; j++){
-            a = 9.9+9.9*a;
-            }
-        }
-        printf(1,"%d - ans: %d\n",getpid(),a);
-    }
-
-    exit();
-     */
+    // int size = 8192;
+    // int fd = open("README", O_RDWR);
+    // printf(1, "freemem now is %d\n", freemem());
+    // char *text = (char *)mmap(0, size, PROT_READ | PROT_WRITE, MAP_POPULATE, fd, 0);
+    // printf(1, "mmap return is: %d\n", text);
+    // printf(1, "freemem now is %d\n", freemem());
+    // printf(1, "parent text[110] is: %c\n", text[110]);
+    // text[110] = '9';
+    // printf(1, "parent text[110] is: %c\n", text[110]);
+    // int fo;
+    // if ((fo = fork()) == 0)
+    // {
+    //     printf(1, "fork! child freemem now is %d\n", freemem());
+    //     printf(1, "child text[110] is: %c\n", text[110]);
+    //     text[110] = '7';
+    //     printf(1, "child text[110] is: %c\n", text[110]);
+    // }
+    // else
+    // {
+    //     wait();
+    //     printf(1, "parent freemem now is %d\n", freemem());
+    //     printf(1, "parent text[110] is: %c\n", text[110]);
+    // }
 }

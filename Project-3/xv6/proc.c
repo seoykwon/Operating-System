@@ -545,34 +545,43 @@ static void
 wakeup1(void *chan)
 {
   struct proc *p;
-  int check = 0;
-  // if there is no process in the RUNNABLE state
-  // set the vruntime of curproc as 0
+
+  int min_vrun = 0;
+  int is_run = 0;
+  int vrun_1tick = 0;
+
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-  {
     if (p->state == RUNNABLE)
     {
-      check = 1;
+      is_run = 1;
+      min_vrun = p->vruntime;
     }
+
+  if (is_run == 1)
+  {
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+      if (p->state == RUNNABLE)
+      {
+        if (min_vrun > p->vruntime)
+          min_vrun = p->vruntime;
+      }
   }
 
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-  {
     if (p->state == SLEEPING && p->chan == chan)
     {
-      p->state = RUNNABLE;
-      int vruntime_tick = (1000 * ticks * (int)ceil((double)1024 / weights[p->nice]));
-
-      if (min_vruntime <= vruntime_tick || !check)
+      vrun_1tick = ((1000 * 1024) / (weight_table[p->nice]));
+      if (min_vrun < vrun_1tick)
       {
         p->vruntime = 0;
       }
       else
       {
-        p->vruntime = min_vruntime - vruntime_tick;
+        p->vruntime = min_vrun - vrun_1tick;
+        // cprintf("set %d-> vrun %d (%d - %d)\n",p->pid, p->vruntime, min_vrun, vrun_1tick);
       }
+      p->state = RUNNABLE;
     }
-  }
 }
 
 // Wake up all processes sleeping on chan.
@@ -714,17 +723,121 @@ void ps(int pid)
     return;
   }
 
-  cprintf("name\tpid\tstate\t\tpriority\n");
+  int getlens(char *s)
+  {
+    int len = 0;
+    while (s[len])
+      len++;
+    return len;
+  }
+
+  int getleni(int n)
+  {
+    int len = 0;
+    if (n == 0)
+      return 1;
+    while (n != 0)
+    {
+      n = n / 10;
+      ++len;
+    }
+    return len;
+  }
+
+  int maxl_name = 0;
+  int maxl_runtime = 0;
+  int maxl_vruntime = 0;
 
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
   {
     if ((pid == 0) || (p->pid == pid))
     {
       if (p->state != 0)
-        cprintf("%s\t%d\t%s\t%d\n", p->name, p->pid, states[p->state], p->nice);
+      {
+        int name_len = getlens(p->name);
+        if (maxl_name < name_len)
+          maxl_name = name_len;
+
+        int runtime_len = getleni(p->runtime);
+        if (maxl_runtime < runtime_len)
+          maxl_runtime = runtime_len;
+
+        int vruntime_len = getleni(p->vruntime);
+        if (maxl_vruntime < vruntime_len)
+          maxl_vruntime = vruntime_len;
+      }
     }
   }
 
+  if (maxl_runtime < 6)
+    maxl_runtime = 6;
+  if (maxl_vruntime < 6)
+    maxl_vruntime = 6;
+  int name_range = ((maxl_name / 6) + 1) * 6;
+  int runtime_range = ((maxl_runtime / 6) + 1) * 6;
+  int vruntime_range = ((maxl_vruntime / 6) + 1) * 6;
+
+  cprintf("name");
+  for (int i = 0; i < (name_range - 4); i++)
+    cprintf(" ");
+  cprintf("pid      ");
+  cprintf("state       ");
+  cprintf("priority    ");
+  cprintf("runtime/weight    ");
+  cprintf("runtime");
+  for (int i = 0; i < (runtime_range - 7); i++)
+    cprintf(" ");
+  cprintf("vruntime");
+  for (int i = 0; i < (vruntime_range - 8); i++)
+    cprintf(" ");
+  cprintf("tick %d", ticks * 1000);
+  cprintf("\n");
+
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {
+    if ((pid == 0) || (p->pid == pid))
+    {
+      if (p->state != 0)
+      {
+
+        cprintf("%s", p->name);
+        int l1 = getlens(p->name);
+        for (int i = 0; i < (name_range - l1); i++)
+          cprintf(" ");
+
+        cprintf("%d", p->pid);
+        int l2 = getleni(p->pid);
+        for (int i = 0; i < (9 - l2); i++)
+          cprintf(" ");
+
+        cprintf("%s", states[p->state]);
+        int l3 = getlens(states[p->state]);
+        for (int i = 0; i < (12 - l3); i++)
+          cprintf(" ");
+
+        cprintf("%d", p->nice);
+        int l4 = getleni(p->nice);
+        for (int i = 0; i < (12 - l4); i++)
+          cprintf(" ");
+
+        cprintf("%d", p->run_d_w);
+        int l5 = getleni(p->run_d_w);
+        for (int i = 0; i < (18 - l5); i++)
+          cprintf(" ");
+
+        cprintf("%d", p->runtime);
+        int l6 = getleni(p->runtime);
+        for (int i = 0; i < (runtime_range - l6); i++)
+          cprintf(" ");
+
+        cprintf("%d", p->vruntime);
+        int l7 = getleni(p->vruntime);
+        for (int i = 0; i < (vruntime_range - l7); i++)
+          cprintf(" ");
+        cprintf("\n");
+      }
+    }
+  }
   release(&ptable.lock);
   return;
 }

@@ -182,6 +182,27 @@ UPROGS=\
 	_wc\
 	_zombie\
 	_mytest\
+$ ls
+.              1 1 512
+..             1 1 512
+README         2 2 2286
+cat            2 3 13704
+echo           2 4 12712
+forktest       2 5 8152
+grep           2 6 15580
+init           2 7 13456
+kill           2 8 12764
+ln             2 9 12668
+ls             2 10 14852
+mkdir          2 11 12848
+rm             2 12 12828
+sh             2 13 23312
+stressfs       2 14 13492
+usertests      2 15 56428
+wc             2 16 14248
+zombie         2 17 12492
+mytest         2 18 12696
+console        3 19 0
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)

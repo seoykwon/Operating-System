@@ -7,7 +7,8 @@ You need to prepare a server that has x86 architecture.
 You can either use a Windows OS and WSL, or ssh to a x86 server. 
 Please include any other options available to process this project.
 
-**Use gcc version 11 as other gcc version make issues in compling**
+**Use gcc version 11 as other gcc version make issues in compling.**
+
 I currently use a Windows computer to use Ubuntu 24.04. Use WSL.
 ```
 sudo apt update

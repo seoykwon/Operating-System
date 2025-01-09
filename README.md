@@ -5,7 +5,6 @@ This repository contains SKKU's OS assignment using xv6.
 If you are a MAC user, emulating x86, or virtualizing x86 in ARM processor will not fulfill the pre-requisites of xv6.
 You need to prepare a server that has x86 architecture.
 You can either use a Windows OS and WSL, or ssh to a x86 server. 
-Please include any other options available to process this project.
 
 **Use gcc version 11 as other gcc version make issues in compling.**
 

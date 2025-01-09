@@ -18,7 +18,9 @@ If your Ubuntu has gcc-13 as default, you won't be able to compile xv6 saying th
 
 ## 1. getnice, setnice, ps
 - add booting message
+
 ![image](https://github.com/user-attachments/assets/6b022713-60cb-4a6e-9930-31a655a9e45c)
+
 in [init.c]
 
 
